@@ -58,7 +58,7 @@ class TentExtraction(QgsProcessingAlgorithm):
         }
 
         feedback.pushInfo("Running algorithm: Sample Soil Brightness")
-        
+
         outputs['SampleSoilBi'] = processing.run('native:rastersampling', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(2)
@@ -77,6 +77,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'green': QgsProcessing.TEMPORARY_OUTPUT,
             'red': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Split Raster Bands")
+
         outputs['SplitRasterBands'] = processing.run('grass7:r.rgb', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(3)
@@ -92,6 +95,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: compute G edge")
+
         outputs['ComputeG'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(4)
@@ -103,6 +109,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'FIELD_NAME': 'BI1',
             'INPUT_LAYER': outputs['SampleSoilBi']['OUTPUT']
         }
+
+        feedback.pushInfo("Running algorithm: Compute Bare Area Statistics")
+
         outputs['BareAreasStatistics'] = processing.run('qgis:basicstatisticsforfields', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(5)
@@ -118,6 +127,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Compute r edge")
+
         outputs['ComputeR'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(6)
@@ -133,6 +145,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: compute f3 part a")
+
         outputs['ComputeF3PartA'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(7)
@@ -148,6 +163,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'LAYERS': [outputs['SplitRasterBands']['green'],outputs['ComputeG']['OUTPUT']],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Compute Absolute Difference Green")
+
         outputs['ComputeAbsoluteDifferenceGreen'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(8)
@@ -161,6 +179,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'MINIMUM_VALUE': outputs['BareAreasStatistics']['MIN'],
             'CLASSIFIED_RASTER': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Compute Bare Areas")
+
         outputs['ComputeBareAreas'] = processing.run('IDP_Sites_Mapping:rasterclassificationusingcomputedranges', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(9)
@@ -176,6 +197,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'LAYERS': [outputs['SplitRasterBands']['red'],outputs['ComputeR']['OUTPUT']],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Compute Absolute Difference Red")
+
         outputs['ComputeAbsoluteDifferenceRed'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(10)
@@ -191,6 +215,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'LAYERS': outputs['ComputeF3PartA']['OUTPUT'],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Compute f3 part b")
+
         outputs['ComputeF3PartB'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(11)
@@ -206,6 +233,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'LAYERS': [outputs['ComputeAbsoluteDifferenceRed']['OUTPUT'],outputs['ComputeAbsoluteDifferenceGreen']['OUTPUT']],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Compute F1 B")
+
         outputs['ComputeF1B'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(12)
@@ -217,6 +247,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'BAND': 1,
             'INPUT': outputs['ComputeF1B']['OUTPUT']
         }
+
+        feedback.pushInfo("Running algorithm: Compute F1 Layer Statistics")
+
         outputs['F1LayerStatistics'] = processing.run('native:rasterlayerstatistics', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(13)
@@ -228,6 +261,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'BAND': 1,
             'INPUT': outputs['ComputeF3PartB']['OUTPUT']
         }
+
+        feedback.pushInfo("Running algorithm: Compute F3 Layer Statistics")
+
         outputs['F3LayerStatistics'] = processing.run('native:rasterlayerstatistics', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(14)
@@ -256,6 +292,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'RTYPE': 0,  # Byte
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Compute Bare Areas Inverse")
+
         outputs['InvertBareareas'] = processing.run('gdal:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(15)
@@ -270,6 +309,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'INPUT': outputs['ComputeF1B']['OUTPUT'],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Normalize F1")
+
         outputs['NormalizeF1'] = processing.run('native:fuzzifyrasterlinearmembership', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(16)
@@ -284,6 +326,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'INPUT': outputs['ComputeF3PartB']['OUTPUT'],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Normalize F3")
+
         outputs['NormalizeF3'] = processing.run('native:fuzzifyrasterlinearmembership', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(17)
@@ -294,6 +339,9 @@ class TentExtraction(QgsProcessingAlgorithm):
         alg_params = {
             'INPUT': outputs['NormalizeF1']['OUTPUT']
         }
+
+        feedback.pushInfo("Running algorithm: Compute F1 Threshold")
+
         outputs['ComputeF1Threshold'] = processing.run('IDP_Sites_Mapping:computethresholdwithotsu', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(18)
@@ -311,6 +359,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'Thresholding Method': 0,  # otsu
             'Output Raster': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Segment F1")
+
         outputs['SegmentF1'] = processing.run('IDP_Sites_Mapping:segmentationusingthresholding', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(19)
@@ -322,6 +373,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'INPUT': outputs['NormalizeF3']['OUTPUT'],
             'OUTPUT_HTML': None
         }
+
+        feedback.pushInfo("Running algorithm: Compute F3 Threshold")
+
         outputs['ComputeF3Threshold'] = processing.run('IDP_Sites_Mapping:computethresholdwithotsu', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(20)
@@ -339,6 +393,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'Thresholding Method': 0,  # otsu
             'Output Raster': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Segment F3")
+
         outputs['SegmentF3'] = processing.run('IDP_Sites_Mapping:segmentationusingthresholding', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(21)
@@ -367,6 +424,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'RTYPE': 0,  # Byte
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Compute Built Up Areas")
+
         outputs['ComputeBuiltAreas'] = processing.run('gdal:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(22)
@@ -395,6 +455,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'RTYPE': 0,  # Byte
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Compute Built Up Soils Difference")
+
         outputs['BuiltUpSoilsDifference'] = processing.run('gdal:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(23)
@@ -414,6 +477,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'yradius': 1,
             'out': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Compute Binary Morphological Operation on the IDP Binary")
+
         outputs['IdpCampBinary'] = processing.run('otb:BinaryMorphologicalOperation', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(24)
@@ -429,6 +495,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'INPUT': outputs['IdpCampBinary']['out'],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Polygonize Built Up Areas Layer")
+
         outputs['PolygonizeStructures'] = processing.run('gdal:polygonize', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(25)
@@ -443,12 +512,17 @@ class TentExtraction(QgsProcessingAlgorithm):
             'VALUE': '1',
             'OUTPUT': parameters['Structures']
         }
+
+        feedback.pushInfo("Running algorithm: Extract the Built Up Areas by Attribute")
+
         outputs['ExtractByAttribute'] = processing.run('native:extractbyattribute', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(26)
         if feedback.isCanceled():
             return {}
         
+        feedback.pushInfo("Running algorithm: Writing Final Layer")
+
         results['Structures'] = outputs['ExtractByAttribute']['OUTPUT']
         return results
 
