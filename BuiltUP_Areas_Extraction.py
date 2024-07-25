@@ -22,7 +22,8 @@ class TentExtraction(QgsProcessingAlgorithm):
     def processAlgorithm(self, parameters, context, model_feedback):
         # Use a multi-step feedback, so that individual child algorithm progress reports are adjusted for the
         # overall progress through the model
-        feedback = QgsProcessingMultiStepFeedback(26, model_feedback)
+        steps = 26
+        feedback = QgsProcessingMultiStepFeedback(steps, model_feedback)
         results = {}
         outputs = {}
 
@@ -38,6 +39,10 @@ class TentExtraction(QgsProcessingAlgorithm):
             'outputpixeltype': 5,  # float
             'out': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        # Log current step and run the algorithm
+        feedback.pushInfo("Running algorithm: Compute Soil Brightness")
+
         outputs['ComputeSoilBrightness'] = processing.run('otb:RadiometricIndices', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(1)
@@ -51,6 +56,9 @@ class TentExtraction(QgsProcessingAlgorithm):
             'RASTERCOPY': outputs['ComputeSoilBrightness']['out'],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
+
+        feedback.pushInfo("Running algorithm: Sample Soil Brightness")
+        
         outputs['SampleSoilBi'] = processing.run('native:rastersampling', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
         feedback.setCurrentStep(2)
@@ -436,6 +444,11 @@ class TentExtraction(QgsProcessingAlgorithm):
             'OUTPUT': parameters['Structures']
         }
         outputs['ExtractByAttribute'] = processing.run('native:extractbyattribute', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(26)
+        if feedback.isCanceled():
+            return {}
+        
         results['Structures'] = outputs['ExtractByAttribute']['OUTPUT']
         return results
 
@@ -454,21 +467,17 @@ class TentExtraction(QgsProcessingAlgorithm):
     def shortHelpString(self):
         return """<html><body><p><!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd">
 <html><head><meta name="qrichtext" content="1" /><style type="text/css">
-p, li { white-space: pre-wrap; }
 </style></head><body style=" font-family:'MS Shell Dlg 2'; font-size:8.25pt; font-weight:400; font-style:normal;">
 <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Algorithmn is implemented based on the procedure defined in the paper titled https://www.researchgate.net/publication/360952641_A_BUILDING_CHANGE_DETECTION_METHOD_BASED_ON_A_SINGLE_ALS_POINT_CLOUD_AND_A_HRS_IMAGE</p></body></html></p>
 <h2>Input parameters</h2>
 <h3>Satellite Image</h3>
-<p>An RGB color channel Satellite Imagery to be used for classifiication. Due to the processing time,smaller tiles are preffered for efficient processing.</p>
+<p>An RGB True color channel Satellite Imagery to be used for classifiication. Due to the processing time,smaller tiles are preffered for efficient processing.</p>
 <h3>Sample Bare Areas</h3>
 <p>A point layer containing bare areas that have been sampled representatively across the image to be analayzed. Given the image variablity, bare areas with varying characterisitcs should be sampled. At least 80 points across an image. The image should not have any other attribute besides the id. Each image should have only the bare areas sampled on that specific image as there can be great variations between images and this will result to misleading information.</p>
 <h2>Outputs</h2>
 <h3>Structures</h3>
 <p>This is apolygon layer that represents that tented areas and the structure. Some post processing should be undertaken to eliminate other structures. Use the rectanglify tool to clean the polygons and make them representative of the tents. One post processing is to compute a difference with then known IDP Camp areas. However care should be taken to only use this approach if/when the IDP camps have already been updated. If not, then a manual cleaning would be prefereable.</p>
-<h2>Examples</h2>
-<p><!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd">
-<html><head><meta name="qrichtext" content="1" /><style type="text/css">
-p, li { white-space: pre-wrap; }
+<style type="text/css">
 </style></head><body style=" font-family:'MS Shell Dlg 2'; font-size:8.25pt; font-weight:400; font-style:normal;">
 <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Todo</p></body></html></p><br><p align="right">Algorithm author: Pascal Ogola</p><p align="right">Help author: Pascal Ogola</p><p align="right">Algorithm version: v1</p></body></html>"""
 
