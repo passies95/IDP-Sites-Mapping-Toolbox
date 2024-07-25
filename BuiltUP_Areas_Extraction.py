@@ -27,6 +27,225 @@ class TentExtraction(QgsProcessingAlgorithm):
         results = {}
         outputs = {}
 
+        # split raster bands
+        # Split the Raster Image into Single Bands
+        alg_params = {
+            'GRASS_RASTER_FORMAT_META': '',
+            'GRASS_RASTER_FORMAT_OPT': '',
+            'GRASS_REGION_CELLSIZE_PARAMETER': 0,
+            'GRASS_REGION_PARAMETER': None,
+            'input': parameters['satellite_image'],
+            'blue': QgsProcessing.TEMPORARY_OUTPUT,
+            'green': QgsProcessing.TEMPORARY_OUTPUT,
+            'red': QgsProcessing.TEMPORARY_OUTPUT
+        }
+
+        feedback.pushInfo("Running algorithm: Split Raster Bands")
+
+        outputs['SplitRasterBands'] = processing.run('grass7:r.rgb', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(1)
+        if feedback.isCanceled():
+            return {}
+        
+        # Compute F1 Layer
+        #######################################################################################################################################
+        # compute g
+        alg_params = {
+            'CELLSIZE': 0,
+            'CRS': None,
+            'EXPRESSION': '"\'Green\' from algorithm \'split raster bands\'@1" /  ( "\'Red\' from algorithm \'split raster bands\'@1" + "\'Green\' from algorithm \'split raster bands\'@1" + "\'Blue\' from algorithm \'split raster bands\'@1" ) ',
+            'EXTENT': None,
+            'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
+
+        feedback.pushInfo("Running algorithm: compute G edge")
+
+        outputs['ComputeG'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(2)
+        if feedback.isCanceled():
+            return {}
+        
+        # compute r
+        alg_params = {
+            'CELLSIZE': 0,
+            'CRS': None,
+            'EXPRESSION': '"\'Red\' from algorithm \'split raster bands\'@1" /  ( "\'Red\' from algorithm \'split raster bands\'@1" + "\'Green\' from algorithm \'split raster bands\'@1" + "\'Blue\' from algorithm \'split raster bands\'@1" ) ',
+            'EXTENT': None,
+            'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
+
+        feedback.pushInfo("Running algorithm: Compute r edge")
+
+        outputs['ComputeR'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(3)
+        if feedback.isCanceled():
+            return {}
+
+        # compute absolute difference Green
+        alg_params = {
+            'CELLSIZE': 0,
+            'CRS': None,
+            'EXPRESSION': 'abs("\'Output\' from algorithm \'compute g\'@1" - "\'Green\' from algorithm \'split raster bands\'@1")',
+            'EXTENT': outputs['SplitRasterBands']['green'],
+            'LAYERS': [outputs['SplitRasterBands']['green'],outputs['ComputeG']['OUTPUT']],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
+
+        feedback.pushInfo("Running algorithm: Compute Absolute Difference Green")
+
+        outputs['ComputeAbsoluteDifferenceGreen'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(4)
+        if feedback.isCanceled():
+            return {}
+
+        # compute absolute difference Red
+        alg_params = {
+            'CELLSIZE': 0,
+            'CRS': None,
+            'EXPRESSION': 'abs("\'Output\' from algorithm \'compute r\'@1" - "\'Red\' from algorithm \'split raster bands\'@1")',
+            'EXTENT': outputs['SplitRasterBands']['red'],
+            'LAYERS': [outputs['SplitRasterBands']['red'],outputs['ComputeR']['OUTPUT']],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
+
+        feedback.pushInfo("Running algorithm: Compute Absolute Difference Red")
+
+        outputs['ComputeAbsoluteDifferenceRed'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(5)
+        if feedback.isCanceled():
+            return {}
+        
+        # compute f1
+        alg_params = {
+            'CELLSIZE': 0,
+            'CRS': None,
+            'EXPRESSION': ' ( "\'Output\' from algorithm \'compute absolute difference Red\'@1" + "\'Output\' from algorithm \'compute absolute difference Green\'@1" )  / 2',
+            'EXTENT': None,
+            'LAYERS': [outputs['ComputeAbsoluteDifferenceRed']['OUTPUT'],outputs['ComputeAbsoluteDifferenceGreen']['OUTPUT']],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
+
+        feedback.pushInfo("Running algorithm: Compute F1 B")
+
+        outputs['ComputeF1B'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(6)
+        if feedback.isCanceled():
+            return {}
+
+        # f1 layer statistics
+        alg_params = {
+            'BAND': 1,
+            'INPUT': outputs['ComputeF1B']['OUTPUT']
+        }
+
+        feedback.pushInfo("Running algorithm: Compute F1 Layer Statistics")
+
+        outputs['F1LayerStatistics'] = processing.run('native:rasterlayerstatistics', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(7)
+        if feedback.isCanceled():
+            return {}
+        
+        # Normalize f1
+        alg_params = {
+            'BAND': 1,
+            'FUZZYHIGHBOUND': outputs['F1LayerStatistics']['MAX'],
+            'FUZZYLOWBOUND': outputs['F1LayerStatistics']['MIN'],
+            'INPUT': outputs['ComputeF1B']['OUTPUT'],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
+
+        feedback.pushInfo("Running algorithm: Normalize F1")
+
+        outputs['NormalizeF1'] = processing.run('native:fuzzifyrasterlinearmembership', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(8)
+        if feedback.isCanceled():
+            return {}
+
+        #################################################################################################
+        # Compute f3 Layer
+        #################################################################################################0
+        
+        # compute f3 part a
+        alg_params = {
+            'CELLSIZE': 0,
+            'CRS': None,
+            'EXPRESSION': '("\'Green\' from algorithm \'split raster bands\'@1" -  min("\'Red\' from algorithm \'split raster bands\'@1","\'Blue\' from algorithm \'split raster bands\'@1"))',
+            'EXTENT': None,
+            'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
+
+        feedback.pushInfo("Running algorithm: compute f3 part a")
+
+        outputs['ComputeF3PartA'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(9)
+        if feedback.isCanceled():
+            return {}
+
+        # compute f3 part b
+        alg_params = {
+            'CELLSIZE': 0,
+            'CRS': None,
+            'EXPRESSION': '( ("\'Output\' from algorithm \'compute f3 part a\'@1" < 0 )  * 0) +  (( "\'Output\' from algorithm \'compute f3 part a\'@1">= 0) * "\'Output\' from algorithm \'compute f3 part a\'@1")',
+            'EXTENT': None,
+            'LAYERS': outputs['ComputeF3PartA']['OUTPUT'],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
+
+        feedback.pushInfo("Running algorithm: Compute f3 part b")
+
+        outputs['ComputeF3PartB'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(10)
+        if feedback.isCanceled():
+            return {}
+
+        # f3 layer statistics
+        alg_params = {
+            'BAND': 1,
+            'INPUT': outputs['ComputeF3PartB']['OUTPUT']
+        }
+
+        feedback.pushInfo("Running algorithm: Compute F3 Layer Statistics")
+
+        outputs['F3LayerStatistics'] = processing.run('native:rasterlayerstatistics', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(11)
+        if feedback.isCanceled():
+            return {}
+        
+        # Normalize f3
+        alg_params = {
+            'BAND': 1,
+            'FUZZYHIGHBOUND': outputs['F3LayerStatistics']['MAX'],
+            'FUZZYLOWBOUND': outputs['F3LayerStatistics']['MIN'],
+            'INPUT': outputs['ComputeF3PartB']['OUTPUT'],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
+
+        feedback.pushInfo("Running algorithm: Normalize F3")
+
+        outputs['NormalizeF3'] = processing.run('native:fuzzifyrasterlinearmembership', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+        feedback.setCurrentStep(12)
+        if feedback.isCanceled():
+            return {}
+
+        ###################################################################################################
+        # Compute Bare Areas Layer
+        ###################################################################################################
+
         # Compute Soil Brightness
         alg_params = {
             'channels.blue': 3,
@@ -45,7 +264,7 @@ class TentExtraction(QgsProcessingAlgorithm):
 
         outputs['ComputeSoilBrightness'] = processing.run('otb:RadiometricIndices', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        feedback.setCurrentStep(1)
+        feedback.setCurrentStep(13)
         if feedback.isCanceled():
             return {}
 
@@ -61,46 +280,7 @@ class TentExtraction(QgsProcessingAlgorithm):
 
         outputs['SampleSoilBi'] = processing.run('native:rastersampling', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        feedback.setCurrentStep(2)
-        if feedback.isCanceled():
-            return {}
-
-        # split raster bands
-        # Split the Raster Image into Single Bands
-        alg_params = {
-            'GRASS_RASTER_FORMAT_META': '',
-            'GRASS_RASTER_FORMAT_OPT': '',
-            'GRASS_REGION_CELLSIZE_PARAMETER': 0,
-            'GRASS_REGION_PARAMETER': None,
-            'input': parameters['satellite_image'],
-            'blue': QgsProcessing.TEMPORARY_OUTPUT,
-            'green': QgsProcessing.TEMPORARY_OUTPUT,
-            'red': QgsProcessing.TEMPORARY_OUTPUT
-        }
-
-        feedback.pushInfo("Running algorithm: Split Raster Bands")
-
-        outputs['SplitRasterBands'] = processing.run('grass7:r.rgb', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
-        feedback.setCurrentStep(3)
-        if feedback.isCanceled():
-            return {}
-
-        # compute g
-        alg_params = {
-            'CELLSIZE': 0,
-            'CRS': None,
-            'EXPRESSION': '"\'Green\' from algorithm \'split raster bands\'@1" /  ( "\'Red\' from algorithm \'split raster bands\'@1" + "\'Green\' from algorithm \'split raster bands\'@1" + "\'Blue\' from algorithm \'split raster bands\'@1" ) ',
-            'EXTENT': None,
-            'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        }
-
-        feedback.pushInfo("Running algorithm: compute G edge")
-
-        outputs['ComputeG'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
-        feedback.setCurrentStep(4)
+        feedback.setCurrentStep(14)
         if feedback.isCanceled():
             return {}
 
@@ -114,61 +294,7 @@ class TentExtraction(QgsProcessingAlgorithm):
 
         outputs['BareAreasStatistics'] = processing.run('qgis:basicstatisticsforfields', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        feedback.setCurrentStep(5)
-        if feedback.isCanceled():
-            return {}
-
-        # compute r
-        alg_params = {
-            'CELLSIZE': 0,
-            'CRS': None,
-            'EXPRESSION': '"\'Red\' from algorithm \'split raster bands\'@1" /  ( "\'Red\' from algorithm \'split raster bands\'@1" + "\'Green\' from algorithm \'split raster bands\'@1" + "\'Blue\' from algorithm \'split raster bands\'@1" ) ',
-            'EXTENT': None,
-            'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        }
-
-        feedback.pushInfo("Running algorithm: Compute r edge")
-
-        outputs['ComputeR'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
-        feedback.setCurrentStep(6)
-        if feedback.isCanceled():
-            return {}
-
-        # compute f3 part a
-        alg_params = {
-            'CELLSIZE': 0,
-            'CRS': None,
-            'EXPRESSION': '("\'Green\' from algorithm \'split raster bands\'@1" -  min("\'Red\' from algorithm \'split raster bands\'@1","\'Blue\' from algorithm \'split raster bands\'@1"))',
-            'EXTENT': None,
-            'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        }
-
-        feedback.pushInfo("Running algorithm: compute f3 part a")
-
-        outputs['ComputeF3PartA'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
-        feedback.setCurrentStep(7)
-        if feedback.isCanceled():
-            return {}
-
-        # compute absolute difference Green
-        alg_params = {
-            'CELLSIZE': 0,
-            'CRS': None,
-            'EXPRESSION': 'abs("\'Output\' from algorithm \'compute g\'@1" - "\'Green\' from algorithm \'split raster bands\'@1")',
-            'EXTENT': outputs['SplitRasterBands']['green'],
-            'LAYERS': [outputs['SplitRasterBands']['green'],outputs['ComputeG']['OUTPUT']],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        }
-
-        feedback.pushInfo("Running algorithm: Compute Absolute Difference Green")
-
-        outputs['ComputeAbsoluteDifferenceGreen'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
-        feedback.setCurrentStep(8)
+        feedback.setCurrentStep(15)
         if feedback.isCanceled():
             return {}
 
@@ -184,92 +310,10 @@ class TentExtraction(QgsProcessingAlgorithm):
 
         outputs['ComputeBareAreas'] = processing.run('IDP_Sites_Mapping:rasterclassificationusingcomputedranges', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        feedback.setCurrentStep(9)
+        feedback.setCurrentStep(16)
         if feedback.isCanceled():
             return {}
-
-        # compute absolute difference Red
-        alg_params = {
-            'CELLSIZE': 0,
-            'CRS': None,
-            'EXPRESSION': 'abs("\'Output\' from algorithm \'compute r\'@1" - "\'Red\' from algorithm \'split raster bands\'@1")',
-            'EXTENT': outputs['SplitRasterBands']['red'],
-            'LAYERS': [outputs['SplitRasterBands']['red'],outputs['ComputeR']['OUTPUT']],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        }
-
-        feedback.pushInfo("Running algorithm: Compute Absolute Difference Red")
-
-        outputs['ComputeAbsoluteDifferenceRed'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
-        feedback.setCurrentStep(10)
-        if feedback.isCanceled():
-            return {}
-
-        # compute f3 part b
-        alg_params = {
-            'CELLSIZE': 0,
-            'CRS': None,
-            'EXPRESSION': '( ("\'Output\' from algorithm \'compute f3 part a\'@1" < 0 )  * 0) +  (( "\'Output\' from algorithm \'compute f3 part a\'@1">= 0) * "\'Output\' from algorithm \'compute f3 part a\'@1")',
-            'EXTENT': None,
-            'LAYERS': outputs['ComputeF3PartA']['OUTPUT'],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        }
-
-        feedback.pushInfo("Running algorithm: Compute f3 part b")
-
-        outputs['ComputeF3PartB'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
-        feedback.setCurrentStep(11)
-        if feedback.isCanceled():
-            return {}
-
-        # compute f1 b
-        alg_params = {
-            'CELLSIZE': 0,
-            'CRS': None,
-            'EXPRESSION': ' ( "\'Output\' from algorithm \'compute absolute difference Red\'@1" + "\'Output\' from algorithm \'compute absolute difference Green\'@1" )  / 2',
-            'EXTENT': None,
-            'LAYERS': [outputs['ComputeAbsoluteDifferenceRed']['OUTPUT'],outputs['ComputeAbsoluteDifferenceGreen']['OUTPUT']],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        }
-
-        feedback.pushInfo("Running algorithm: Compute F1 B")
-
-        outputs['ComputeF1B'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
-        feedback.setCurrentStep(12)
-        if feedback.isCanceled():
-            return {}
-
-        # f1 layer statistics
-        alg_params = {
-            'BAND': 1,
-            'INPUT': outputs['ComputeF1B']['OUTPUT']
-        }
-
-        feedback.pushInfo("Running algorithm: Compute F1 Layer Statistics")
-
-        outputs['F1LayerStatistics'] = processing.run('native:rasterlayerstatistics', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
-        feedback.setCurrentStep(13)
-        if feedback.isCanceled():
-            return {}
-
-        # f3 layer statistics
-        alg_params = {
-            'BAND': 1,
-            'INPUT': outputs['ComputeF3PartB']['OUTPUT']
-        }
-
-        feedback.pushInfo("Running algorithm: Compute F3 Layer Statistics")
-
-        outputs['F3LayerStatistics'] = processing.run('native:rasterlayerstatistics', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
-        feedback.setCurrentStep(14)
-        if feedback.isCanceled():
-            return {}
-
+        
         # Invert BareAreas
         alg_params = {
             'BAND_A': 1,
@@ -297,43 +341,13 @@ class TentExtraction(QgsProcessingAlgorithm):
 
         outputs['InvertBareareas'] = processing.run('gdal:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        feedback.setCurrentStep(15)
-        if feedback.isCanceled():
-            return {}
-
-        # Normalize f1
-        alg_params = {
-            'BAND': 1,
-            'FUZZYHIGHBOUND': outputs['F1LayerStatistics']['MAX'],
-            'FUZZYLOWBOUND': outputs['F1LayerStatistics']['MIN'],
-            'INPUT': outputs['ComputeF1B']['OUTPUT'],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        }
-
-        feedback.pushInfo("Running algorithm: Normalize F1")
-
-        outputs['NormalizeF1'] = processing.run('native:fuzzifyrasterlinearmembership', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
-        feedback.setCurrentStep(16)
-        if feedback.isCanceled():
-            return {}
-
-        # Normalize f3
-        alg_params = {
-            'BAND': 1,
-            'FUZZYHIGHBOUND': outputs['F3LayerStatistics']['MAX'],
-            'FUZZYLOWBOUND': outputs['F3LayerStatistics']['MIN'],
-            'INPUT': outputs['ComputeF3PartB']['OUTPUT'],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        }
-
-        feedback.pushInfo("Running algorithm: Normalize F3")
-
-        outputs['NormalizeF3'] = processing.run('native:fuzzifyrasterlinearmembership', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
         feedback.setCurrentStep(17)
         if feedback.isCanceled():
             return {}
+        
+        ##################################################################################################
+        # Threshold and Segment f1, f3 and Compute Built Up Areas
+        ##################################################################################################
 
         # Compute f1 Threshold
         alg_params = {
