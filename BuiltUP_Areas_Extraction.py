@@ -51,12 +51,19 @@ class TentExtraction(QgsProcessingAlgorithm):
         # Compute F1 Layer
         #######################################################################################################################################
         # compute g
+        green_band = outputs['SplitRasterBands']['green']
+        red_band = outputs['SplitRasterBands']['red']
+        blue_band = outputs['SplitRasterBands']['blue']
         alg_params = {
             'CELLSIZE': 0,
             'CRS': None,
-            'EXPRESSION': '"\'Green\' from algorithm \'split raster bands\'@1" /  ( "\'Red\' from algorithm \'split raster bands\'@1" + "\'Green\' from algorithm \'split raster bands\'@1" + "\'Blue\' from algorithm \'split raster bands\'@1" ) ',
+            # 'EXPRESSION': '"\'Green\' from algorithm \'split raster bands\'@1" /  ( "\'Red\' from algorithm \'split raster bands\'@1" + "\'Green\' from algorithm \'split raster bands\'@1" + "\'Blue\' from algorithm \'split raster bands\'@1" ) ',
+            'EXPRESSION': green_band /  ( red_band + green_band + blue_band ) ,
             'EXTENT': None,
-            'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
+            # 'LAYERS': [outputs['SplitRasterBands']['red'],
+            #            outputs['SplitRasterBands']['green'],
+            #            outputs['SplitRasterBands']['blue']],
+            'LAYERS': [red_band,green_band,blue_band],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
 
