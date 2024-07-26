@@ -60,10 +60,10 @@ class TentExtraction(QgsProcessingAlgorithm):
             # 'EXPRESSION': '"\'Green\' from algorithm \'split raster bands\'@1" /  ( "\'Red\' from algorithm \'split raster bands\'@1" + "\'Green\' from algorithm \'split raster bands\'@1" + "\'Blue\' from algorithm \'split raster bands\'@1" ) ',
             'EXPRESSION': '("green_band@1" / ("red_band@1" + "green_band@1" + "blue_band@1"))',
             'EXTENT': None,
-            # 'LAYERS': [outputs['SplitRasterBands']['red'],
-            #            outputs['SplitRasterBands']['green'],
-            #            outputs['SplitRasterBands']['blue']],
-            'LAYERS': [red_band,green_band,blue_band],
+            'LAYERS': [outputs['SplitRasterBands']['red'],
+                       outputs['SplitRasterBands']['green'],
+                       outputs['SplitRasterBands']['blue']],
+            # 'LAYERS': [red_band,green_band,blue_band],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
         }
 
