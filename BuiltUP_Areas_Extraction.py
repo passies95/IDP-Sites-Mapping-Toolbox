@@ -54,6 +54,7 @@ class TentExtraction(QgsProcessingAlgorithm):
         green_band = outputs['SplitRasterBands']['green']
         red_band = outputs['SplitRasterBands']['red']
         blue_band = outputs['SplitRasterBands']['blue']
+        print(type(green_band))
         alg_params = {
             'CELLSIZE': 0,
             'CRS': None,
