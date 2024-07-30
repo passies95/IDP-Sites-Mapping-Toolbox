@@ -38,6 +38,7 @@ from .compute_threshold_Otsu import ThresholdUsingOtsuAlgorithm
 from .Segment_with_Thresholding import SegmentationUsingThresholding
 from .BuiltUP_Areas_Extraction import TentExtraction
 from .BuiltUP_Areas_Extraction_for_Known_Areas import TentExtractionForKnownAreas
+from .population_estimate import PopulationEstimation
 
 
 class IDPSiteMappingProvider(QgsProcessingProvider):
@@ -68,6 +69,7 @@ class IDPSiteMappingProvider(QgsProcessingProvider):
         # Segmentation Tools
         self.addAlgorithm(TentExtraction())
         self.addAlgorithm(TentExtractionForKnownAreas())
+        self.addAlgorithm(PopulationEstimation())
         # add additional algorithms here
         # self.addAlgorithm(MyOtherAlgorithm())
 
