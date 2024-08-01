@@ -20,15 +20,20 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterVectorLayer('sample_bare_areas', 'Sample Bare Areas', types=[QgsProcessing.TypeVectorPoint], defaultValue=None))
         self.addParameter(QgsProcessingParameterVectorLayer('known_idp_areas', 'Known IDP Sites', types=[QgsProcessing.TypeVectorPolygon], defaultValue=None, optional=True))
         self.addParameter(QgsProcessingParameterVectorLayer('buildings', 'Buildings Layer', types=[QgsProcessing.TypeVectorPolygon], defaultValue=None, optional=True))
+        self.addParameter(QgsProcessingParameterFeatureSink('builtup', 'Built Up Areas', type=QgsProcessing.TypeVectorAnyGeometry, createByDefault=True, defaultValue=None))
         self.addParameter(QgsProcessingParameterFeatureSink('Structures', 'Structures', type=QgsProcessing.TypeVectorAnyGeometry, createByDefault=True, defaultValue=None))
 
     def processAlgorithm(self, parameters, context, model_feedback):
         # Use a multi-step feedback, so that individual child algorithm progress reports are adjusted for the
         # overall progress through the model
-        steps = 26
+        steps = 34
         feedback = QgsProcessingMultiStepFeedback(steps, model_feedback)
         results = {}
         outputs = {}
+
+        # Access the input parameters
+        known_idp_areasLayer = self.parameterAsLayer(parameters, 'known_idp_areas', context)
+        buildingsLayer = self.parameterAsLayer(parameters, 'buildings', context)
 
         # split raster bands
         # Split the Raster Image into Single Bands
@@ -567,7 +572,7 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
             'INPUT': outputs['PolygonizeStructures']['OUTPUT'],
             'OPERATOR': 0,  # =
             'VALUE': '1',
-            'OUTPUT': parameters['Structures']
+            'OUTPUT': parameters['builtup']
         }
 
         feedback.pushInfo("Running algorithm: Extract the Built Up Areas by Attribute")
@@ -578,9 +583,290 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
         
-        feedback.pushInfo("Running algorithm: Writing Final Layer")
+        feedback.pushInfo("Running algorithm: Writing Built Up Areas Layer")
 
-        results['Structures'] = outputs['ExtractByAttribute']['OUTPUT']
+        results['builtup'] = outputs['ExtractByAttribute']['OUTPUT']
+    
+        # ##################################################################################################
+        # # Clean Structure Layer
+        # ###########################################################################
+        # Check if the user provisioned the IDP sites and the Buildings Layer
+        if known_idp_areasLayer and buildingsLayer:
+            feedback.pushInfo("Processing Known IDP Sites layer")
+
+            # BufferIDP Sites
+            alg_params = {
+                'DISSOLVE': True,
+                'DISTANCE': 5,
+                'END_CAP_STYLE': 0,  # Round
+                'INPUT': known_idp_areasLayer,
+                'JOIN_STYLE': 0,  # Round
+                'MITER_LIMIT': 2,
+                'SEGMENTS': 5,
+                'OUTPUT': QgsProcessingUtils.generateTempFilename('sitesBuffered.gpkg')
+            }
+            feedback.pushInfo("Running algorithm: Buffer Known IDP Sites Areas")
+
+            outputs['BufferidpSites'] = processing.run('native:buffer', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(27)
+            if feedback.isCanceled():
+                return {}
+            
+            # IDP Sites Multipart to singleparts
+            alg_params = {
+                'INPUT': outputs['BufferidpSites']['OUTPUT'],
+                'OUTPUT': QgsProcessingUtils.generateTempFilename('sitesSingleParts.gpkg')
+            }
+
+            feedback.pushInfo("Running algorithm: IDP Sites Multipart to Single Parts")
+
+            outputs['IdpSitesMultipartToSingleparts'] = processing.run('native:multiparttosingleparts', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(28)
+            if feedback.isCanceled():
+                return {}
+
+            # IDP Sites, Structures Intersection
+            alg_params = {
+                'INPUT': outputs['ExtractByAttribute']['OUTPUT'],
+                'INPUT_FIELDS': [''],
+                'OVERLAY': outputs['IdpSitesMultipartToSingleparts']['OUTPUT'],
+                'OVERLAY_FIELDS': [''],
+                'OVERLAY_FIELDS_PREFIX': '',
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }
+
+            feedback.pushInfo("Running algorithm: DP Sites, Structures Intersection")
+
+            outputs['SitesStructuresIntersection'] = processing.run('native:intersection', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(29)
+            if feedback.isCanceled():
+                return {}
+            
+            # Built Up and Buildings Difference
+            alg_params = {
+                'INPUT': outputs['SitesStructuresIntersection']['OUTPUT'],
+                'OVERLAY': buildingsLayer,
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }
+
+            feedback.pushInfo("Running algorithm: DP Sites, Structures Intersection")
+
+            outputs['BuiltUpBuildingsDifference'] = processing.run('native:difference', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(30)
+            if feedback.isCanceled():
+                return {}
+
+            # IDP Structures Multipart to singleparts
+            alg_params = {
+                'INPUT': outputs['BuiltUpBuildingsDifference']['OUTPUT'],
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }
+
+            feedback.pushInfo("Running algorithm: DP Sites, Structures Intersection")
+
+            outputs['IdpStructuresMultipartToSingleparts'] = processing.run('native:multiparttosingleparts', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(31)
+            if feedback.isCanceled():
+                return {}
+
+            # Fix geometries
+            alg_params = {
+                'INPUT': outputs['IdpStructuresMultipartToSingleparts']['OUTPUT'],
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }
+
+            feedback.pushInfo("Running algorithm: Fix Structures Geometry")
+
+            outputs['FixStructuresGeometries'] = processing.run('native:fixgeometries', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(32)
+            if feedback.isCanceled():
+                return {}
+
+            # Delete holes
+            alg_params = {
+                'INPUT': outputs['FixStructuresGeometries']['OUTPUT'],
+                'MIN_AREA': 5,
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }
+
+            feedback.pushInfo("Running algorithm: Delete Structures Holes")
+
+            outputs['DeleteStructureHoles'] = processing.run('native:deleteholes', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(33)
+            if feedback.isCanceled():
+                return {}
+
+            # IDP Structures
+            alg_params = {
+                'INPUT': outputs['DeleteStructureHoles']['OUTPUT'],
+                'OUTPUT': parameters['Structures']
+            }
+
+            feedback.pushInfo("Running algorithm: Fixing Structures Geometry")
+
+            outputs['IDPStructures'] = processing.run('native:fixgeometries', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+            
+            feedback.setCurrentStep(34)
+            if feedback.isCanceled():
+                return {}
+            
+            feedback.pushInfo("Writing Final Layer")
+
+            results['Structures'] = outputs['IDPStructures']['OUTPUT']
+        
+        elif known_idp_areasLayer:
+            # Scenario 1: Only known_idp_areas is defined
+            feedback.pushInfo('Only known_idp_areas layer is defined.')
+
+            # BufferIDP Sites
+            alg_params = {
+                'DISSOLVE': True,
+                'DISTANCE': 5,
+                'END_CAP_STYLE': 0,  # Round
+                'INPUT': known_idp_areasLayer,
+                'JOIN_STYLE': 0,  # Round
+                'MITER_LIMIT': 2,
+                'SEGMENTS': 5,
+                'OUTPUT': QgsProcessingUtils.generateTempFilename('sitesBuffered.gpkg')
+            }
+            feedback.pushInfo("Running algorithm: Buffer Known IDP Sites Areas")
+
+            outputs['BufferidpSites'] = processing.run('native:buffer', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(27)
+            if feedback.isCanceled():
+                return {}
+            
+            # IDP Sites Multipart to singleparts
+            alg_params = {
+                'INPUT': outputs['BufferidpSites']['OUTPUT'],
+                'OUTPUT': QgsProcessingUtils.generateTempFilename('sitesSingleParts.gpkg')
+            }
+
+            feedback.pushInfo("Running algorithm: IDP Sites Multipart to Single Parts")
+
+            outputs['IdpSitesMultipartToSingleparts'] = processing.run('native:multiparttosingleparts', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(28)
+            if feedback.isCanceled():
+                return {}
+
+            # IDP Sites, Structures Intersection
+            alg_params = {
+                'INPUT': outputs['ExtractByAttribute']['OUTPUT'],
+                'INPUT_FIELDS': [''],
+                'OVERLAY': outputs['IdpSitesMultipartToSingleparts']['OUTPUT'],
+                'OVERLAY_FIELDS': [''],
+                'OVERLAY_FIELDS_PREFIX': '',
+                'OUTPUT': parameters['Structures']
+            }
+
+            feedback.pushInfo("Running algorithm: DP Sites, Structures Intersection")
+
+            outputs['SitesStructuresIntersection'] = processing.run('native:intersection', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(29)
+            if feedback.isCanceled():
+                return {}
+            
+            feedback.pushInfo("Writing Final Layer")
+
+            results['Structures'] = outputs['SitesStructuresIntersection']['OUTPUT']
+
+        elif buildingsLayer:
+            # Scenario 2: Only buildings is defined
+            feedback.pushInfo('Only buildings layer is defined.')
+
+            # Built Up and Buildings Difference
+            alg_params = {
+                'INPUT': outputs['ExtractByAttribute']['OUTPUT'],
+                'OVERLAY': buildingsLayer,
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }
+
+            feedback.pushInfo("Running algorithm: IDP Sites, Structures Intersection")
+
+            outputs['BuiltUpBuildingsDifference'] = processing.run('native:difference', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(27)
+            if feedback.isCanceled():
+                return {}
+
+            # IDP Structures Multipart to singleparts
+            alg_params = {
+                'INPUT': outputs['BuiltUpBuildingsDifference']['OUTPUT'],
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }
+
+            feedback.pushInfo("Running algorithm: DP Sites, Structures Intersection")
+
+            outputs['IdpStructuresMultipartToSingleparts'] = processing.run('native:multiparttosingleparts', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(28)
+            if feedback.isCanceled():
+                return {}
+
+            # Fix geometries
+            alg_params = {
+                'INPUT': outputs['IdpStructuresMultipartToSingleparts']['OUTPUT'],
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }
+
+            feedback.pushInfo("Running algorithm: Fix Structures Geometry")
+
+            outputs['FixStructuresGeometries'] = processing.run('native:fixgeometries', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(29)
+            if feedback.isCanceled():
+                return {}
+
+            # Delete holes
+            alg_params = {
+                'INPUT': outputs['FixStructuresGeometries']['OUTPUT'],
+                'MIN_AREA': 5,
+                'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            }
+
+            feedback.pushInfo("Running algorithm: Delete Structures Holes")
+
+            outputs['DeleteStructureHoles'] = processing.run('native:deleteholes', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+
+            feedback.setCurrentStep(30)
+            if feedback.isCanceled():
+                return {}
+
+            # IDP Structures
+            alg_params = {
+                'INPUT': outputs['DeleteStructureHoles']['OUTPUT'],
+                'OUTPUT': parameters['Structures']
+            }
+
+            feedback.pushInfo("Running algorithm: Fixing Structures Geometry")
+
+            outputs['IDPStructures'] = processing.run('native:fixgeometries', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+            
+            feedback.setCurrentStep(31)
+            if feedback.isCanceled():
+                return {}
+            
+            feedback.pushInfo("Writing Final Layer")
+
+            results['Structures'] = outputs['IDPStructures']['OUTPUT']
+
+
+        else:
+            # Scenario 4: Neither known_idp_areas nor buildings is defined
+            feedback.pushInfo('Neither known_idp_areas nor buildings layers are defined.')
+            # Handle this case appropriately, such as by setting default values or returning an error
+            return results
+
         return results
 
     def name(self):
@@ -602,7 +888,7 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
 <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Algorithmn is implemented based on the procedure defined in the paper titled https://www.researchgate.net/publication/360952641_A_BUILDING_CHANGE_DETECTION_METHOD_BASED_ON_A_SINGLE_ALS_POINT_CLOUD_AND_A_HRS_IMAGE</p></body></html></p>
 <h2>Input parameters</h2>
 <h3>Satellite Image</h3>
-<p>An RGB True color channel Satellite Imagery to be used for classifiication. Due to the processing time,smaller tiles are preffered for efficient processing.</p>
+<p>An RGB True color channel Satellite Imagery to be used for classifiication. Due to the processing time,smaller tiles are preffered for efficient processing. It is recommended to use a projected CRS</p>
 <h3>Sample Bare Areas</h3>
 <p>A point layer containing bare areas that have been sampled representatively across the image to be analayzed. Given the image variablity, bare areas with varying characterisitcs should be sampled. At least 80 points across an image. The image should not have any other attribute besides the id. Each image should have only the bare areas sampled on that specific image as there can be great variations between images and this will result to misleading information.</p>
 <h3>Known IDP Sites</h3>
