@@ -155,422 +155,432 @@ class TentExtraction(QgsProcessingAlgorithm):
             return {}
         
         # # compute f1
-        # alg_params = {
-        #     'CELLSIZE': 0,
-        #     'CRS': None,
-        #     'EXPRESSION': ' ( "\'Output\' from algorithm \'compute absolute difference Red\'@1" + "\'Output\' from algorithm \'compute absolute difference Green\'@1" )  / 2',
-        #     'EXTENT': None,
-        #     'LAYERS': [outputs['ComputeAbsoluteDifferenceRed']['OUTPUT'],outputs['ComputeAbsoluteDifferenceGreen']['OUTPUT']],
-        #     'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Retrieve absolute difference red and Green
+        absG = QgsRasterLayer(outputs['ComputeR']['OUTPUT'], 'absG')
+        absR = QgsRasterLayer(outputs['ComputeR']['OUTPUT'], 'absR')
+        alg_params = {
+            'CELLSIZE': 0,
+            'CRS': None,
+            'EXPRESSION': ' ( "absR@1" + "absG@1" )  / 2',
+            'EXTENT': None,
+            'LAYERS': [outputs['ComputeAbsoluteDifferenceRed']['OUTPUT'],outputs['ComputeAbsoluteDifferenceGreen']['OUTPUT']],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Compute F1 B")
+        feedback.pushInfo("Running algorithm: Compute F1 B")
 
-        # outputs['ComputeF1B'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['ComputeF1B'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(6)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(6)
+        if feedback.isCanceled():
+            return {}
 
-        # # f1 layer statistics
-        # alg_params = {
-        #     'BAND': 1,
-        #     'INPUT': outputs['ComputeF1B']['OUTPUT']
-        # }
+        # f1 layer statistics
+        alg_params = {
+            'BAND': 1,
+            'INPUT': outputs['ComputeF1B']['OUTPUT']
+        }
 
-        # feedback.pushInfo("Running algorithm: Compute F1 Layer Statistics")
+        feedback.pushInfo("Running algorithm: Compute F1 Layer Statistics")
 
-        # outputs['F1LayerStatistics'] = processing.run('native:rasterlayerstatistics', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['F1LayerStatistics'] = processing.run('native:rasterlayerstatistics', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(7)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(7)
+        if feedback.isCanceled():
+            return {}
         
-        # # Normalize f1
-        # alg_params = {
-        #     'BAND': 1,
-        #     'FUZZYHIGHBOUND': outputs['F1LayerStatistics']['MAX'],
-        #     'FUZZYLOWBOUND': outputs['F1LayerStatistics']['MIN'],
-        #     'INPUT': outputs['ComputeF1B']['OUTPUT'],
-        #     'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Normalize f1
+        alg_params = {
+            'BAND': 1,
+            'FUZZYHIGHBOUND': outputs['F1LayerStatistics']['MAX'],
+            'FUZZYLOWBOUND': outputs['F1LayerStatistics']['MIN'],
+            'INPUT': outputs['ComputeF1B']['OUTPUT'],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Normalize F1")
+        feedback.pushInfo("Running algorithm: Normalize F1")
 
-        # outputs['NormalizeF1'] = processing.run('native:fuzzifyrasterlinearmembership', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['NormalizeF1'] = processing.run('native:fuzzifyrasterlinearmembership', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(8)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(8)
+        if feedback.isCanceled():
+            return {}
 
         # #################################################################################################
         # # Compute f3 Layer
         # #################################################################################################0
         
-        # # compute f3 part a
-        # alg_params = {
-        #     'CELLSIZE': 0,
-        #     'CRS': None,
-        #     'EXPRESSION': '("\'Green\' from algorithm \'split raster bands\'@1" -  min("\'Red\' from algorithm \'split raster bands\'@1","\'Blue\' from algorithm \'split raster bands\'@1"))',
-        #     'EXTENT': None,
-        #     'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
-        #     'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # compute f3 part a
+        alg_params = {
+            'CELLSIZE': 0,
+            'CRS': None,
+            'EXPRESSION': '("green@1" -  min("red@1","blue@1"))',
+            'EXTENT': None,
+            'LAYERS': [outputs['SplitRasterBands']['red'],
+                       outputs['SplitRasterBands']['green'],
+                       outputs['SplitRasterBands']['blue']],
+            'OUTPUT': QgsProcessingUtils.generateTempFilename('f3A.tif')
+        }
 
-        # feedback.pushInfo("Running algorithm: compute f3 part a")
+        feedback.pushInfo("Running algorithm: compute f3 part a")
 
-        # outputs['ComputeF3PartA'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['ComputeF3PartA'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(9)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(9)
+        if feedback.isCanceled():
+            return {}
 
         # # compute f3 part b
-        # alg_params = {
-        #     'CELLSIZE': 0,
-        #     'CRS': None,
-        #     'EXPRESSION': '( ("\'Output\' from algorithm \'compute f3 part a\'@1" < 0 )  * 0) +  (( "\'Output\' from algorithm \'compute f3 part a\'@1">= 0) * "\'Output\' from algorithm \'compute f3 part a\'@1")',
-        #     'EXTENT': None,
-        #     'LAYERS': outputs['ComputeF3PartA']['OUTPUT'],
-        #     'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Retrieve f3 A layer
+        f3A = QgsRasterLayer(outputs['ComputeF3PartA']['OUTPUT'], 'f3A')
+        alg_params = {
+            'CELLSIZE': 0,
+            'CRS': None,
+            'EXPRESSION': '( ("f3A@1" < 0 )  * 0) +  (( "f3A@1">= 0) * "f3A@1")',
+            'EXTENT': None,
+            'LAYERS': outputs['ComputeF3PartA']['OUTPUT'],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Compute f3 part b")
+        feedback.pushInfo("Running algorithm: Compute f3 part b")
 
-        # outputs['ComputeF3PartB'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['ComputeF3PartB'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(10)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(10)
+        if feedback.isCanceled():
+            return {}
 
-        # # f3 layer statistics
-        # alg_params = {
-        #     'BAND': 1,
-        #     'INPUT': outputs['ComputeF3PartB']['OUTPUT']
-        # }
+        # f3 layer statistics
+        alg_params = {
+            'BAND': 1,
+            'INPUT': outputs['ComputeF3PartB']['OUTPUT']
+        }
 
-        # feedback.pushInfo("Running algorithm: Compute F3 Layer Statistics")
+        feedback.pushInfo("Running algorithm: Compute F3 Layer Statistics")
 
-        # outputs['F3LayerStatistics'] = processing.run('native:rasterlayerstatistics', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['F3LayerStatistics'] = processing.run('native:rasterlayerstatistics', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(11)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(11)
+        if feedback.isCanceled():
+            return {}
         
-        # # Normalize f3
-        # alg_params = {
-        #     'BAND': 1,
-        #     'FUZZYHIGHBOUND': outputs['F3LayerStatistics']['MAX'],
-        #     'FUZZYLOWBOUND': outputs['F3LayerStatistics']['MIN'],
-        #     'INPUT': outputs['ComputeF3PartB']['OUTPUT'],
-        #     'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Normalize f3
+        alg_params = {
+            'BAND': 1,
+            'FUZZYHIGHBOUND': outputs['F3LayerStatistics']['MAX'],
+            'FUZZYLOWBOUND': outputs['F3LayerStatistics']['MIN'],
+            'INPUT': outputs['ComputeF3PartB']['OUTPUT'],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Normalize F3")
+        feedback.pushInfo("Running algorithm: Normalize F3")
 
-        # outputs['NormalizeF3'] = processing.run('native:fuzzifyrasterlinearmembership', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['NormalizeF3'] = processing.run('native:fuzzifyrasterlinearmembership', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(12)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(12)
+        if feedback.isCanceled():
+            return {}
 
         # ###################################################################################################
         # # Compute Bare Areas Layer
         # ###################################################################################################
 
-        # # Compute Soil Brightness
-        # alg_params = {
-        #     'channels.blue': 3,
-        #     'channels.green': 2,
-        #     'channels.mir': None,
-        #     'channels.nir': None,
-        #     'channels.red': 1,
-        #     'in': parameters['satellite_image'],
-        #     'list': [18],  # Soil:BI
-        #     'outputpixeltype': 5,  # float
-        #     'out': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Compute Soil Brightness
+        alg_params = {
+            'channels.blue': 3,
+            'channels.green': 2,
+            'channels.mir': None,
+            'channels.nir': None,
+            'channels.red': 1,
+            'in': parameters['satellite_image'],
+            'list': 'Soil:BI',  # Soil:BI
+            'outputpixeltype': 5,  # float
+            'out': QgsProcessingUtils.generateTempFilename('soilBI.tif')
+        }
 
-        # # Log current step and run the algorithm
-        # feedback.pushInfo("Running algorithm: Compute Soil Brightness")
+        # Log current step and run the algorithm
+        feedback.pushInfo("Running algorithm: Compute Soil Brightness")
 
-        # outputs['ComputeSoilBrightness'] = processing.run('otb:RadiometricIndices', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['ComputeSoilBrightness'] = processing.run('otb:RadiometricIndices', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(13)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(13)
+        if feedback.isCanceled():
+            return {}
 
-        # # Sample Soil BI
-        # alg_params = {
-        #     'COLUMN_PREFIX': 'BI',
-        #     'INPUT': parameters['sample_bare_areas'],
-        #     'RASTERCOPY': outputs['ComputeSoilBrightness']['out'],
-        #     'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Sample Soil BI
+        alg_params = {
+            'COLUMN_PREFIX': 'BI',
+            'INPUT': parameters['sample_bare_areas'],
+            'RASTERCOPY': outputs['ComputeSoilBrightness']['out'],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Sample Soil Brightness")
+        feedback.pushInfo("Running algorithm: Sample Soil Brightness")
 
-        # outputs['SampleSoilBi'] = processing.run('native:rastersampling', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['SampleSoilBi'] = processing.run('native:rastersampling', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(14)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(14)
+        if feedback.isCanceled():
+            return {}
 
-        # # Bare Areas Statistics
-        # alg_params = {
-        #     'FIELD_NAME': 'BI1',
-        #     'INPUT_LAYER': outputs['SampleSoilBi']['OUTPUT']
-        # }
+        # Bare Areas Statistics
+        alg_params = {
+            'FIELD_NAME': 'BI1',
+            'INPUT_LAYER': outputs['SampleSoilBi']['OUTPUT']
+        }
 
-        # feedback.pushInfo("Running algorithm: Compute Bare Area Statistics")
+        feedback.pushInfo("Running algorithm: Compute Bare Area Statistics")
 
-        # outputs['BareAreasStatistics'] = processing.run('qgis:basicstatisticsforfields', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['BareAreasStatistics'] = processing.run('qgis:basicstatisticsforfields', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(15)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(15)
+        if feedback.isCanceled():
+            return {}
 
-        # # Compute Bare Areas
-        # alg_params = {
-        #     'INPUT': outputs['ComputeSoilBrightness']['out'],
-        #     'MAXIMUM_VALUE': outputs['BareAreasStatistics']['THIRDQUARTILE'],
-        #     'MINIMUM_VALUE': outputs['BareAreasStatistics']['MIN'],
-        #     'CLASSIFIED_RASTER': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Compute Bare Areas
+        alg_params = {
+            'INPUT': outputs['ComputeSoilBrightness']['out'],
+            'MAXIMUM_VALUE': outputs['BareAreasStatistics']['THIRDQUARTILE'],
+            'MINIMUM_VALUE': outputs['BareAreasStatistics']['MIN'],
+            'CLASSIFIED_RASTER': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Compute Bare Areas")
+        feedback.pushInfo("Running algorithm: Compute Bare Areas")
 
-        # outputs['ComputeBareAreas'] = processing.run('IDP_Sites_Mapping:rasterclassificationusingcomputedranges', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['ComputeBareAreas'] = processing.run('IDP_Sites_Mapping:rasterclassificationusingcomputedranges', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(16)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(16)
+        if feedback.isCanceled():
+            return {}
         
-        # # Invert BareAreas
-        # alg_params = {
-        #     'BAND_A': 1,
-        #     'BAND_B': None,
-        #     'BAND_C': None,
-        #     'BAND_D': None,
-        #     'BAND_E': None,
-        #     'BAND_F': None,
-        #     'EXTRA': '',
-        #     'FORMULA': '1-A',
-        #     'INPUT_A': outputs['ComputeBareAreas']['CLASSIFIED_RASTER'],
-        #     'INPUT_B': None,
-        #     'INPUT_C': None,
-        #     'INPUT_D': None,
-        #     'INPUT_E': None,
-        #     'INPUT_F': None,
-        #     'NO_DATA': None,
-        #     'OPTIONS': '',
-        #     'PROJWIN': None,
-        #     'RTYPE': 0,  # Byte
-        #     'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Invert BareAreas
+        alg_params = {
+            'BAND_A': 1,
+            'BAND_B': None,
+            'BAND_C': None,
+            'BAND_D': None,
+            'BAND_E': None,
+            'BAND_F': None,
+            'EXTRA': '',
+            'FORMULA': '1-A',
+            'INPUT_A': outputs['ComputeBareAreas']['CLASSIFIED_RASTER'],
+            'INPUT_B': None,
+            'INPUT_C': None,
+            'INPUT_D': None,
+            'INPUT_E': None,
+            'INPUT_F': None,
+            'NO_DATA': None,
+            'OPTIONS': '',
+            'PROJWIN': None,
+            'RTYPE': 0,  # Byte
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Compute Bare Areas Inverse")
+        feedback.pushInfo("Running algorithm: Compute Bare Areas Inverse")
 
-        # outputs['InvertBareareas'] = processing.run('gdal:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['InvertBareareas'] = processing.run('gdal:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(17)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(17)
+        if feedback.isCanceled():
+            return {}
         
         # ##################################################################################################
         # # Threshold and Segment f1, f3 and Compute Built Up Areas
         # ##################################################################################################
 
-        # # Compute f1 Threshold
-        # alg_params = {
-        #     'INPUT': outputs['NormalizeF1']['OUTPUT']
-        # }
+        # Compute f1 Threshold
+        alg_params = {
+            'INPUT': outputs['NormalizeF1']['OUTPUT']
+        }
 
-        # feedback.pushInfo("Running algorithm: Compute F1 Threshold")
+        feedback.pushInfo("Running algorithm: Compute F1 Threshold")
 
-        # outputs['ComputeF1Threshold'] = processing.run('IDP_Sites_Mapping:computethresholdwithotsu', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['ComputeF1Threshold'] = processing.run('IDP_Sites_Mapping:computethresholdwithotsu', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(18)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(18)
+        if feedback.isCanceled():
+            return {}
 
-        # # Segment f1
-        # alg_params = {
-        #     'Adaptive Method': 0,  # gaussian
-        #     'Block Size': outputs['ComputeF1Threshold']['OUTPUT_THRESHOLD'],
-        #     'Invert Image': False,
-        #     'Modal Blurring': 0,
-        #     'Percent': 0.05,
-        #     'Raster': outputs['NormalizeF1']['OUTPUT'],
-        #     'Thresholding Method': 0,  # otsu
-        #     'Output Raster': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Segment f1
+        alg_params = {
+            'Adaptive Method': 0,  # gaussian
+            # Convert the threshold value to a float from the numpy.float
+            'Block Size': float(outputs['ComputeF1Threshold']['OUTPUT_THRESHOLD']),
+            'Invert Image': False,
+            'Modal Blurring': 0,
+            'Percent': 0.05,
+            'Raster': outputs['NormalizeF1']['OUTPUT'],
+            'Thresholding Method': 0,  # otsu
+            'Output Raster': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Segment F1")
+        feedback.pushInfo("Running algorithm: Segment F1")
 
-        # outputs['SegmentF1'] = processing.run('IDP_Sites_Mapping:segmentationusingthresholding', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['SegmentF1'] = processing.run('IDP_Sites_Mapping:segmentationusingthresholding', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(19)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(19)
+        if feedback.isCanceled():
+            return {}
 
-        # # Compute f3 Threshold
-        # alg_params = {
-        #     'INPUT': outputs['NormalizeF3']['OUTPUT'],
-        #     'OUTPUT_HTML': None
-        # }
+        # Compute f3 Threshold
+        alg_params = {
+            'INPUT': outputs['NormalizeF3']['OUTPUT'],
+            'OUTPUT_HTML': None
+        }
 
-        # feedback.pushInfo("Running algorithm: Compute F3 Threshold")
+        feedback.pushInfo("Running algorithm: Compute F3 Threshold")
 
-        # outputs['ComputeF3Threshold'] = processing.run('IDP_Sites_Mapping:computethresholdwithotsu', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['ComputeF3Threshold'] = processing.run('IDP_Sites_Mapping:computethresholdwithotsu', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(20)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(20)
+        if feedback.isCanceled():
+            return {}
 
-        # # Segment f3
-        # alg_params = {
-        #     'Adaptive Method': 0,  # gaussian
-        #     'Block Size': outputs['ComputeF3Threshold']['OUTPUT_THRESHOLD'],
-        #     'Invert Image': False,
-        #     'Modal Blurring': 0,
-        #     'Percent': 0.05,
-        #     'Raster': outputs['NormalizeF3']['OUTPUT'],
-        #     'Thresholding Method': 0,  # otsu
-        #     'Output Raster': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Segment f3
+        alg_params = {
+            'Adaptive Method': 0,  # gaussian
+            # Convert the threshold to a float
+            'Block Size': float(outputs['ComputeF3Threshold']['OUTPUT_THRESHOLD']),
+            'Invert Image': False,
+            'Modal Blurring': 0,
+            'Percent': 0.05,
+            'Raster': outputs['NormalizeF3']['OUTPUT'],
+            'Thresholding Method': 0,  # otsu
+            'Output Raster': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Segment F3")
+        feedback.pushInfo("Running algorithm: Segment F3")
 
-        # outputs['SegmentF3'] = processing.run('IDP_Sites_Mapping:segmentationusingthresholding', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['SegmentF3'] = processing.run('IDP_Sites_Mapping:segmentationusingthresholding', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(21)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(21)
+        if feedback.isCanceled():
+            return {}
 
-        # # Compute Built Areas
-        # alg_params = {
-        #     'BAND_A': 1,
-        #     'BAND_B': 1,
-        #     'BAND_C': None,
-        #     'BAND_D': None,
-        #     'BAND_E': None,
-        #     'BAND_F': None,
-        #     'EXTRA': '',
-        #     'FORMULA': 'logical_and(A==1,B==1)*0*A+logical_and(A==1,B==0)',
-        #     'INPUT_A': outputs['SegmentF3']['Output Raster'],
-        #     'INPUT_B': outputs['SegmentF1']['Output Raster'],
-        #     'INPUT_C': None,
-        #     'INPUT_D': None,
-        #     'INPUT_E': None,
-        #     'INPUT_F': None,
-        #     'NO_DATA': None,
-        #     'OPTIONS': '',
-        #     'PROJWIN': None,
-        #     'RTYPE': 0,  # Byte
-        #     'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Compute Built Areas
+        alg_params = {
+            'BAND_A': 1,
+            'BAND_B': 1,
+            'BAND_C': None,
+            'BAND_D': None,
+            'BAND_E': None,
+            'BAND_F': None,
+            'EXTRA': '',
+            'FORMULA': 'logical_and(A==1,B==1)*0*A+logical_and(A==1,B==0)',
+            'INPUT_A': outputs['SegmentF3']['Output Raster'],
+            'INPUT_B': outputs['SegmentF1']['Output Raster'],
+            'INPUT_C': None,
+            'INPUT_D': None,
+            'INPUT_E': None,
+            'INPUT_F': None,
+            'NO_DATA': None,
+            'OPTIONS': '',
+            'PROJWIN': None,
+            'RTYPE': 0,  # Byte
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Compute Built Up Areas")
+        feedback.pushInfo("Running algorithm: Compute Built Up Areas")
 
-        # outputs['ComputeBuiltAreas'] = processing.run('gdal:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['ComputeBuiltAreas'] = processing.run('gdal:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(22)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(22)
+        if feedback.isCanceled():
+            return {}
 
-        # # Built Up Soils Difference
-        # alg_params = {
-        #     'BAND_A': 1,
-        #     'BAND_B': 1,
-        #     'BAND_C': None,
-        #     'BAND_D': None,
-        #     'BAND_E': None,
-        #     'BAND_F': None,
-        #     'EXTRA': '',
-        #     'FORMULA': 'A*B',
-        #     'INPUT_A': outputs['ComputeBuiltAreas']['OUTPUT'],
-        #     'INPUT_B': outputs['InvertBareareas']['OUTPUT'],
-        #     'INPUT_C': None,
-        #     'INPUT_D': None,
-        #     'INPUT_E': None,
-        #     'INPUT_F': None,
-        #     'NO_DATA': None,
-        #     'OPTIONS': '',
-        #     'PROJWIN': None,
-        #     'RTYPE': 0,  # Byte
-        #     'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Built Up Soils Difference
+        alg_params = {
+            'BAND_A': 1,
+            'BAND_B': 1,
+            'BAND_C': None,
+            'BAND_D': None,
+            'BAND_E': None,
+            'BAND_F': None,
+            'EXTRA': '',
+            'FORMULA': 'A*B',
+            'INPUT_A': outputs['ComputeBuiltAreas']['OUTPUT'],
+            'INPUT_B': outputs['InvertBareareas']['OUTPUT'],
+            'INPUT_C': None,
+            'INPUT_D': None,
+            'INPUT_E': None,
+            'INPUT_F': None,
+            'NO_DATA': None,
+            'OPTIONS': '',
+            'PROJWIN': None,
+            'RTYPE': 0,  # Byte
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Compute Built Up Soils Difference")
+        feedback.pushInfo("Running algorithm: Compute Built Up Soils Difference")
 
-        # outputs['BuiltUpSoilsDifference'] = processing.run('gdal:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['BuiltUpSoilsDifference'] = processing.run('gdal:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(23)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(23)
+        if feedback.isCanceled():
+            return {}
 
-        # # IDP Camp Binary
-        # alg_params = {
-        #     'backval': 0,
-        #     'channel': 1,
-        #     'filter': 'opening',
-        #     'foreval': 1,
-        #     'in': outputs['BuiltUpSoilsDifference']['OUTPUT'],
-        #     'outputpixeltype': 5,  # float
-        #     'structype': 'box',
-        #     'xradius': 1,
-        #     'yradius': 1,
-        #     'out': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # IDP Camp Binary
+        # builtUpBinary = QgsRasterLayer(outputs['BuiltUpSoilsDifference']['OUTPUT'], 'builtUpBinary')
+        alg_params = {
+            'backval': 0,
+            'channel': 1,
+            'filter': 'opening',
+            'foreval': 1,
+            'in': outputs['BuiltUpSoilsDifference']['OUTPUT'],
+            'outputpixeltype': 5,  # float
+            'structype': 'box',
+            'xradius': 1,
+            'yradius': 1,
+            'out': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Compute Binary Morphological Operation on the IDP Binary")
+        feedback.pushInfo("Running algorithm: Compute Binary Morphological Operation on the IDP Binary")
 
-        # outputs['IdpCampBinary'] = processing.run('otb:BinaryMorphologicalOperation', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['IdpCampBinary'] = processing.run('otb:BinaryMorphologicalOperation', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(24)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(24)
+        if feedback.isCanceled():
+            return {}
 
-        # # Polygonize Structures
-        # alg_params = {
-        #     'BAND': 1,
-        #     'EIGHT_CONNECTEDNESS': False,
-        #     'EXTRA': '',
-        #     'FIELD': 'DN',
-        #     'INPUT': outputs['IdpCampBinary']['out'],
-        #     'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
-        # }
+        # Polygonize Structures
+        alg_params = {
+            'BAND': 1,
+            'EIGHT_CONNECTEDNESS': False,
+            'EXTRA': '',
+            'FIELD': 'DN',
+            'INPUT': outputs['IdpCampBinary']['out'],
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }
 
-        # feedback.pushInfo("Running algorithm: Polygonize Built Up Areas Layer")
+        feedback.pushInfo("Running algorithm: Polygonize Built Up Areas Layer")
 
-        # outputs['PolygonizeStructures'] = processing.run('gdal:polygonize', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['PolygonizeStructures'] = processing.run('gdal:polygonize', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(25)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(25)
+        if feedback.isCanceled():
+            return {}
 
-        # # Extract by attribute
-        # alg_params = {
-        #     'FIELD': 'DN',
-        #     'INPUT': outputs['PolygonizeStructures']['OUTPUT'],
-        #     'OPERATOR': 0,  # =
-        #     'VALUE': '1',
-        #     'OUTPUT': parameters['Structures']
-        # }
+        # Extract by attribute
+        alg_params = {
+            'FIELD': 'DN',
+            'INPUT': outputs['PolygonizeStructures']['OUTPUT'],
+            'OPERATOR': 0,  # =
+            'VALUE': '1',
+            'OUTPUT': parameters['Structures']
+        }
 
-        # feedback.pushInfo("Running algorithm: Extract the Built Up Areas by Attribute")
+        feedback.pushInfo("Running algorithm: Extract the Built Up Areas by Attribute")
 
-        # outputs['ExtractByAttribute'] = processing.run('native:extractbyattribute', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
+        outputs['ExtractByAttribute'] = processing.run('native:extractbyattribute', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
 
-        # feedback.setCurrentStep(26)
-        # if feedback.isCanceled():
-        #     return {}
+        feedback.setCurrentStep(26)
+        if feedback.isCanceled():
+            return {}
         
-        # feedback.pushInfo("Running algorithm: Writing Final Layer")
+        feedback.pushInfo("Running algorithm: Writing Final Layer")
 
-        # results['Structures'] = outputs['ExtractByAttribute']['OUTPUT']
-        # return results
+        results['Structures'] = outputs['ExtractByAttribute']['OUTPUT']
+        return results
 
     def name(self):
         return 'Tent Extraction'

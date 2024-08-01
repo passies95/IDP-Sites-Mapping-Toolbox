@@ -3,7 +3,8 @@ Name : Tent Extraction
 Group : model
 """
 
-from qgis.core import QgsProcessing
+import os
+from qgis.core import QgsProcessing, QgsRasterLayer, QgsProcessingUtils
 from qgis.core import QgsProcessingAlgorithm
 from qgis.core import QgsProcessingMultiStepFeedback
 from qgis.core import QgsProcessingParameterRasterLayer
@@ -12,7 +13,7 @@ from qgis.core import QgsProcessingParameterFeatureSink
 from qgis import processing
 
 
-class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
+class TentExtraction(QgsProcessingAlgorithm):
 
     def initAlgorithm(self, config=None):
         self.addParameter(QgsProcessingParameterRasterLayer('satellite_image', 'Satellite Image', defaultValue=None))
@@ -29,15 +30,22 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
 
         # split raster bands
         # Split the Raster Image into Single Bands
+        # Generate temporary filenames to save split bands
+        # blueBand = QgsProcessingUtils.generateTempFilename('blue.tif')
+        # greenBand = QgsProcessingUtils.generateTempFilename('green.tif')
+        # redBand = QgsProcessingUtils.generateTempFilename('red.tif')
+
         alg_params = {
             'GRASS_RASTER_FORMAT_META': '',
             'GRASS_RASTER_FORMAT_OPT': '',
             'GRASS_REGION_CELLSIZE_PARAMETER': 0,
             'GRASS_REGION_PARAMETER': None,
             'input': parameters['satellite_image'],
-            'blue': QgsProcessing.TEMPORARY_OUTPUT,
-            'green': QgsProcessing.TEMPORARY_OUTPUT,
-            'red': QgsProcessing.TEMPORARY_OUTPUT
+            # Since these are Grass Algorithmn using Temporary Output produces wrong resuts
+            # Save to temporary filename instead
+            'blue': QgsProcessingUtils.generateTempFilename('blue.tif'),
+            'green': QgsProcessingUtils.generateTempFilename('green.tif'),
+            'red': QgsProcessingUtils.generateTempFilename('red.tif')
         }
 
         feedback.pushInfo("Running algorithm: Split Raster Bands")
@@ -50,28 +58,38 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         
         # Compute F1 Layer
         #######################################################################################################################################
+        # Write the Red, Green and Blue Bands to a new layer
+        blueBand = QgsRasterLayer(outputs['SplitRasterBands']['blue'], 'blue')
+        greenBand= QgsRasterLayer(outputs['SplitRasterBands']['green'], 'green')
+        redBand = QgsRasterLayer(outputs['SplitRasterBands']['red'], 'red')
+
+        print('name:', blueBand.bandName(1))
+        print('name:', greenBand.bandName(1))
+        print('name:', redBand.bandName(1))
+
+        # Check if layer is valid
+        if not blueBand.isValid() or not greenBand.isValid() or not redBand.isValid():
+            print("One or more raster layers are not valid.")
+            exit()
+        
         # compute g
-        green_band = outputs['SplitRasterBands']['green']
-        red_band = outputs['SplitRasterBands']['red']
-        blue_band = outputs['SplitRasterBands']['blue']
-        print(type(green_band))
+
         alg_params = {
             'CELLSIZE': 0,
             'CRS': None,
-            # 'EXPRESSION': '"\'Green\' from algorithm \'split raster bands\'@1" /  ( "\'Red\' from algorithm \'split raster bands\'@1" + "\'Green\' from algorithm \'split raster bands\'@1" + "\'Blue\' from algorithm \'split raster bands\'@1" ) ',
-            'EXPRESSION': '("green_band@1" / ("red_band@1" + "green_band@1" + "blue_band@1"))',
+            'EXPRESSION': '"green@1" /  ( "red@1" + "green@1" + "blue@1" ) ',
             'EXTENT': None,
             'LAYERS': [outputs['SplitRasterBands']['red'],
                        outputs['SplitRasterBands']['green'],
                        outputs['SplitRasterBands']['blue']],
-            # 'LAYERS': [red_band,green_band,blue_band],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            'OUTPUT': QgsProcessingUtils.generateTempFilename('g.tif')
         }
 
         feedback.pushInfo("Running algorithm: compute G edge")
 
         outputs['ComputeG'] = processing.run('qgis:rastercalculator', alg_params, context=context, feedback=feedback, is_child_algorithm=True)
-
+        # feedback.pushInfo(f"Raster calculation result saved to: {outputs['ComputeG']['OUTPUT']}")
+        
         feedback.setCurrentStep(2)
         if feedback.isCanceled():
             return {}
@@ -80,10 +98,12 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         alg_params = {
             'CELLSIZE': 0,
             'CRS': None,
-            'EXPRESSION': '"\'Red\' from algorithm \'split raster bands\'@1" /  ( "\'Red\' from algorithm \'split raster bands\'@1" + "\'Green\' from algorithm \'split raster bands\'@1" + "\'Blue\' from algorithm \'split raster bands\'@1" ) ',
+            'EXPRESSION': '"red@1" /  ( "red@1" + "green@1" + "blue@1" ) ',
             'EXTENT': None,
-            'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            'LAYERS': [outputs['SplitRasterBands']['red'],
+                       outputs['SplitRasterBands']['green'],
+                       outputs['SplitRasterBands']['blue']],
+            'OUTPUT': QgsProcessingUtils.generateTempFilename('r.tif')
         }
 
         feedback.pushInfo("Running algorithm: Compute r edge")
@@ -95,13 +115,15 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
             return {}
 
         # compute absolute difference Green
+        # retrieve the calculated layer g
+        g = QgsRasterLayer(outputs['ComputeG']['OUTPUT'], 'g')
         alg_params = {
             'CELLSIZE': 0,
             'CRS': None,
-            'EXPRESSION': 'abs("\'Output\' from algorithm \'compute g\'@1" - "\'Green\' from algorithm \'split raster bands\'@1")',
+            'EXPRESSION': 'abs("g@1" - "green@1")',
             'EXTENT': outputs['SplitRasterBands']['green'],
             'LAYERS': [outputs['SplitRasterBands']['green'],outputs['ComputeG']['OUTPUT']],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            'OUTPUT': QgsProcessingUtils.generateTempFilename('absG.tif')
         }
 
         feedback.pushInfo("Running algorithm: Compute Absolute Difference Green")
@@ -112,14 +134,16 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
 
-        # compute absolute difference Red
+        # # compute absolute difference Red
+        # Retrieve the computed layer r
+        r = QgsRasterLayer(outputs['ComputeR']['OUTPUT'], 'r')
         alg_params = {
             'CELLSIZE': 0,
             'CRS': None,
-            'EXPRESSION': 'abs("\'Output\' from algorithm \'compute r\'@1" - "\'Red\' from algorithm \'split raster bands\'@1")',
+            'EXPRESSION': 'abs("r@1" - "red@1")',
             'EXTENT': outputs['SplitRasterBands']['red'],
             'LAYERS': [outputs['SplitRasterBands']['red'],outputs['ComputeR']['OUTPUT']],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            'OUTPUT': QgsProcessingUtils.generateTempFilename('absR.tif')
         }
 
         feedback.pushInfo("Running algorithm: Compute Absolute Difference Red")
@@ -130,11 +154,14 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
         
-        # compute f1
+        # # compute f1
+        # Retrieve absolute difference red and Green
+        absG = QgsRasterLayer(outputs['ComputeR']['OUTPUT'], 'absG')
+        absR = QgsRasterLayer(outputs['ComputeR']['OUTPUT'], 'absR')
         alg_params = {
             'CELLSIZE': 0,
             'CRS': None,
-            'EXPRESSION': ' ( "\'Output\' from algorithm \'compute absolute difference Red\'@1" + "\'Output\' from algorithm \'compute absolute difference Green\'@1" )  / 2',
+            'EXPRESSION': ' ( "absR@1" + "absG@1" )  / 2',
             'EXTENT': None,
             'LAYERS': [outputs['ComputeAbsoluteDifferenceRed']['OUTPUT'],outputs['ComputeAbsoluteDifferenceGreen']['OUTPUT']],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
@@ -179,18 +206,20 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
 
-        #################################################################################################
-        # Compute f3 Layer
-        #################################################################################################0
+        # #################################################################################################
+        # # Compute f3 Layer
+        # #################################################################################################0
         
         # compute f3 part a
         alg_params = {
             'CELLSIZE': 0,
             'CRS': None,
-            'EXPRESSION': '("\'Green\' from algorithm \'split raster bands\'@1" -  min("\'Red\' from algorithm \'split raster bands\'@1","\'Blue\' from algorithm \'split raster bands\'@1"))',
+            'EXPRESSION': '("green@1" -  min("red@1","blue@1"))',
             'EXTENT': None,
-            'LAYERS': [outputs['SplitRasterBands']['red'],outputs['SplitRasterBands']['green'],outputs['SplitRasterBands']['blue']],
-            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+            'LAYERS': [outputs['SplitRasterBands']['red'],
+                       outputs['SplitRasterBands']['green'],
+                       outputs['SplitRasterBands']['blue']],
+            'OUTPUT': QgsProcessingUtils.generateTempFilename('f3A.tif')
         }
 
         feedback.pushInfo("Running algorithm: compute f3 part a")
@@ -201,11 +230,13 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
 
-        # compute f3 part b
+        # # compute f3 part b
+        # Retrieve f3 A layer
+        f3A = QgsRasterLayer(outputs['ComputeF3PartA']['OUTPUT'], 'f3A')
         alg_params = {
             'CELLSIZE': 0,
             'CRS': None,
-            'EXPRESSION': '( ("\'Output\' from algorithm \'compute f3 part a\'@1" < 0 )  * 0) +  (( "\'Output\' from algorithm \'compute f3 part a\'@1">= 0) * "\'Output\' from algorithm \'compute f3 part a\'@1")',
+            'EXPRESSION': '( ("f3A@1" < 0 )  * 0) +  (( "f3A@1">= 0) * "f3A@1")',
             'EXTENT': None,
             'LAYERS': outputs['ComputeF3PartA']['OUTPUT'],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
@@ -250,9 +281,9 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
 
-        ###################################################################################################
-        # Compute Bare Areas Layer
-        ###################################################################################################
+        # ###################################################################################################
+        # # Compute Bare Areas Layer
+        # ###################################################################################################
 
         # Compute Soil Brightness
         alg_params = {
@@ -262,9 +293,9 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
             'channels.nir': None,
             'channels.red': 1,
             'in': parameters['satellite_image'],
-            'list': [18],  # Soil:BI
+            'list': 'Soil:BI',  # Soil:BI
             'outputpixeltype': 5,  # float
-            'out': QgsProcessing.TEMPORARY_OUTPUT
+            'out': QgsProcessingUtils.generateTempFilename('soilBI.tif')
         }
 
         # Log current step and run the algorithm
@@ -353,9 +384,9 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
         
-        ##################################################################################################
-        # Threshold and Segment f1, f3 and Compute Built Up Areas
-        ##################################################################################################
+        # ##################################################################################################
+        # # Threshold and Segment f1, f3 and Compute Built Up Areas
+        # ##################################################################################################
 
         # Compute f1 Threshold
         alg_params = {
@@ -373,7 +404,8 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         # Segment f1
         alg_params = {
             'Adaptive Method': 0,  # gaussian
-            'Block Size': outputs['ComputeF1Threshold']['OUTPUT_THRESHOLD'],
+            # Convert the threshold value to a float from the numpy.float
+            'Block Size': float(outputs['ComputeF1Threshold']['OUTPUT_THRESHOLD']),
             'Invert Image': False,
             'Modal Blurring': 0,
             'Percent': 0.05,
@@ -407,7 +439,8 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         # Segment f3
         alg_params = {
             'Adaptive Method': 0,  # gaussian
-            'Block Size': outputs['ComputeF3Threshold']['OUTPUT_THRESHOLD'],
+            # Convert the threshold to a float
+            'Block Size': float(outputs['ComputeF3Threshold']['OUTPUT_THRESHOLD']),
             'Invert Image': False,
             'Modal Blurring': 0,
             'Percent': 0.05,
@@ -549,10 +582,10 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
         return results
 
     def name(self):
-        return 'TentExtractionForKnownAreas'
+        return 'Tent Extraction'
 
     def displayName(self):
-        return 'Tent Extraction For Known Areas'
+        return 'Tent Extraction'
 
     def group(self):
         return 'Segmentation'
@@ -578,4 +611,4 @@ class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
 <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Todo</p></body></html></p><br><p align="right">Algorithm author: Pascal Ogola</p><p align="right">Help author: Pascal Ogola</p><p align="right">Algorithm version: v1</p></body></html>"""
 
     def createInstance(self):
-        return TentExtractionForKnownAreas()
+        return TentExtraction()
