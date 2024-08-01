@@ -38,6 +38,8 @@ deprecated=False
 # (or upgraded) can be specified.
 # Check the documentation for more information.
 # plugin_dependencies=orfeo Toolbox
+pip_dependencies=numpy==1.24.1, rasterio, opencv-python==4.5.5.64, networkx==3.2.1, scikit-image==0.22.0, 
+scikit-learn==1.4.2
 
 Category of the plugin: Raster, Vector, Database or Web
 # category=Raster
