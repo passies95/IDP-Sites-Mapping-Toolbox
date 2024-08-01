@@ -34,6 +34,10 @@ def classFactory(iface):  # pylint: disable=invalid-name
     :param iface: A QGIS interface instance.
     :type iface: QgsInterface
     """
-    #
+    # Load dependencies first
+    from . import installer
+    installer.install_dependencies()
+
+    # Instantiate the plugin
     from .idp_sites_mapping import IDPSiteMappingPlugin
     return IDPSiteMappingPlugin()
