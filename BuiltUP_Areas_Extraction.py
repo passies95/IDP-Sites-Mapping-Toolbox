@@ -522,16 +522,16 @@ class TentExtraction(QgsProcessingAlgorithm):
         # IDP Camp Binary
         # builtUpBinary = QgsRasterLayer(outputs['BuiltUpSoilsDifference']['OUTPUT'], 'builtUpBinary')
         alg_params = {
-            'backval': 0,
-            'channel': 1,
-            'filter': 'opening',
-            'foreval': 1,
             'in': outputs['BuiltUpSoilsDifference']['OUTPUT'],
-            'outputpixeltype': 5,  # float
+            'out': QgsProcessingUtils.generateTempFilename('builtUpBinary.tif'),
+            'channel': 1,
             'structype': 'box',
             'xradius': 1,
             'yradius': 1,
-            'out': QgsProcessing.TEMPORARY_OUTPUT
+            'filter': 'opening',
+            'filter.opening.foreval': 1,
+            'filter.opening.backval': 0,
+            'outputpixeltype': 5  # float
         }
 
         feedback.pushInfo("Running algorithm: Compute Binary Morphological Operation on the IDP Binary")

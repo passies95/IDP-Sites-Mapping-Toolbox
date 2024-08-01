@@ -13,11 +13,13 @@ from qgis.core import QgsProcessingParameterFeatureSink
 from qgis import processing
 
 
-class TentExtraction(QgsProcessingAlgorithm):
+class TentExtractionForKnownAreas(QgsProcessingAlgorithm):
 
     def initAlgorithm(self, config=None):
         self.addParameter(QgsProcessingParameterRasterLayer('satellite_image', 'Satellite Image', defaultValue=None))
         self.addParameter(QgsProcessingParameterVectorLayer('sample_bare_areas', 'Sample Bare Areas', types=[QgsProcessing.TypeVectorPoint], defaultValue=None))
+        self.addParameter(QgsProcessingParameterVectorLayer('known_idp_areas', 'Known IDP Sites', types=[QgsProcessing.TypeVectorPolygon], defaultValue=None, optional=True))
+        self.addParameter(QgsProcessingParameterVectorLayer('buildings', 'Buildings Layer', types=[QgsProcessing.TypeVectorPolygon], defaultValue=None, optional=True))
         self.addParameter(QgsProcessingParameterFeatureSink('Structures', 'Structures', type=QgsProcessing.TypeVectorAnyGeometry, createByDefault=True, defaultValue=None))
 
     def processAlgorithm(self, parameters, context, model_feedback):
@@ -521,16 +523,16 @@ class TentExtraction(QgsProcessingAlgorithm):
 
         # IDP Camp Binary
         alg_params = {
-            'backval': 0,
-            'channel': 1,
-            'filter': 'opening',
-            'foreval': 1,
             'in': outputs['BuiltUpSoilsDifference']['OUTPUT'],
-            'outputpixeltype': 5,  # float
+            'out': QgsProcessingUtils.generateTempFilename('builtUpBinary.tif'),
+            'channel': 1,
             'structype': 'box',
             'xradius': 1,
             'yradius': 1,
-            'out': QgsProcessing.TEMPORARY_OUTPUT
+            'filter': 'opening',
+            'filter.opening.foreval': 1,
+            'filter.opening.backval': 0,
+            'outputpixeltype': 5  # float
         }
 
         feedback.pushInfo("Running algorithm: Compute Binary Morphological Operation on the IDP Binary")
@@ -582,10 +584,10 @@ class TentExtraction(QgsProcessingAlgorithm):
         return results
 
     def name(self):
-        return 'Tent Extraction'
+        return 'TentExtractionForKnownAreas'
 
     def displayName(self):
-        return 'Tent Extraction'
+        return 'Tent Extraction For Known Areas'
 
     def group(self):
         return 'Segmentation'
@@ -603,6 +605,10 @@ class TentExtraction(QgsProcessingAlgorithm):
 <p>An RGB True color channel Satellite Imagery to be used for classifiication. Due to the processing time,smaller tiles are preffered for efficient processing.</p>
 <h3>Sample Bare Areas</h3>
 <p>A point layer containing bare areas that have been sampled representatively across the image to be analayzed. Given the image variablity, bare areas with varying characterisitcs should be sampled. At least 80 points across an image. The image should not have any other attribute besides the id. Each image should have only the bare areas sampled on that specific image as there can be great variations between images and this will result to misleading information.</p>
+<h3>Known IDP Sites</h3>
+<p>A polygon layer with geomtries of the Known IDP areas.Due to variations such as Image Shifts, it is best that the geometries have been adjusted to conform to the specific Image for analysis due to distortions such as Image Shifts that may likely be present if the geometries were digitized from another imagery. However, the process, will add a 10 metre buffer around the Known IDP Sites geometry to account for possible distortions.Equallly, geometry should be reprojected to the same coordinate as the Input Image</p>
+<h3>Buildings Layer</h3>
+<p>A Polygon geometry layer of known buildings. Any built up surface that intersects with a building geometry will be considered a building and thus discared. Care however has to be taken to ensure that the building layer has been corrected to match the specific Image where the analysis is being undertaken</p>
 <h2>Outputs</h2>
 <h3>Structures</h3>
 <p>This is apolygon layer that represents that tented areas and the structure. Some post processing should be undertaken to eliminate other structures. Use the rectanglify tool to clean the polygons and make them representative of the tents. One post processing is to compute a difference with then known IDP Camp areas. However care should be taken to only use this approach if/when the IDP camps have already been updated. If not, then a manual cleaning would be prefereable.</p>
@@ -611,4 +617,4 @@ class TentExtraction(QgsProcessingAlgorithm):
 <p style=" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;">Todo</p></body></html></p><br><p align="right">Algorithm author: Pascal Ogola</p><p align="right">Help author: Pascal Ogola</p><p align="right">Algorithm version: v1</p></body></html>"""
 
     def createInstance(self):
-        return TentExtraction()
+        return TentExtractionForKnownAreas()
